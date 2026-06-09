@@ -166,6 +166,19 @@
   .floor-card.info{border-color:rgba(34,211,238,.32);background:linear-gradient(135deg,rgba(34,211,238,.10),rgba(168,85,247,.05))}
   .floor-card.info .fbig b{color:var(--cyan)}
 
+  /* suggested-exit chips */
+  .target-chips{display:flex;flex-wrap:wrap;gap:7px}
+  .tchip{display:inline-flex;flex-direction:column;gap:1px;align-items:flex-start;cursor:pointer;
+    background:#0a0f1f;border:1px solid var(--line-strong);border-radius:10px;padding:7px 11px;
+    font-family:'JetBrains Mono',monospace;transition:border-color .15s,transform .08s,background .15s}
+  .tchip:hover{border-color:var(--cyan);background:linear-gradient(135deg,rgba(34,211,238,.10),rgba(168,85,247,.05))}
+  .tchip:active{transform:translateY(1px)}
+  .tchip.active{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan) inset}
+  .tchip .tprice{font-size:14px;font-weight:600;color:var(--txt)}
+  .tchip .tbasis{font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-family:inherit}
+  .tchip.r .tprice{color:var(--violet)}
+  .tchip.lvl .tprice{color:var(--cyan)}
+
   /* trailing stair viz */
   #stairWrap{background:#0a0f1f;border:1px solid var(--line);border-radius:12px;padding:12px 12px 8px;margin-bottom:10px}
   .stair-legend{display:flex;gap:16px;justify-content:center;margin-top:6px;font-size:10.5px;color:var(--muted)}
@@ -249,6 +262,11 @@
       <div class="field">
         <label>Exit price (where you're selling)</label>
         <div class="input-shell"><span class="prefix">$</span><input type="number" id="exit" value="1.50" min="0" step="0.01"></div>
+      </div>
+      <div class="field" id="targetField">
+        <label>Suggested exits <span style="color:var(--faint)">(tap to use)</span></label>
+        <div class="target-chips" id="targetChips"></div>
+        <p class="hint" id="targetHint">Add a stop for risk-based (R-multiple) targets, and Connect a chart below to pull levels from recent price action.</p>
       </div>
       <div class="field">
         <label>Stop-loss <span style="color:var(--faint)">(max-risk exit &mdash; optional)</span></label>
@@ -505,6 +523,7 @@ const CONFIG = {
     trailPct:$('trailPct'), trailDollar:$('trailDollar'), trailPctWrap:$('trailPctWrap'), trailDollarWrap:$('trailDollarWrap'),
     priceNow:$('priceNow'), suggestCard:$('suggestCard'), suggestText:$('suggestText'),
     stairWrap:$('stairWrap'), trailRows:$('trailRows'),
+    targetChips:$('targetChips'), targetHint:$('targetHint'),
     symInput:$('symInput'), loadChart:$('loadChart'), tvPlaceholder:$('tvPlaceholder'),
     liveBar:$('liveBar'), livePrice:$('livePrice'), liveChg:$('liveChg'), liveHigh:$('liveHigh')
   };
@@ -535,8 +554,9 @@ const CONFIG = {
   ['entry','exit','stop','shares','capital','lockDollar','lockPct','trailPct','trailDollar','priceNow'].forEach(k=> els[k].addEventListener('input', calc));
 
   // ---- Live chart (TradingView Lightweight Charts) fed by the Railway/Polygon backend ----
-  const LAST = { entry:0, exit:0, stop:null, trail:null };
+  const LAST = { entry:0, exit:0, stop:null, trail:null, vwap:null, rangeHigh:null };
   let lwcLoaded=false, chart=null, candleSeries=null, priceLines=[], quoteTimer=null, currentSymbol=null, sessionHigh=0, chartActive=false;
+  let lastCandles=null; // most recent bars from /api/candles, used to suggest target zones
 
   function loadLWC(){
     return new Promise(resolve=>{
@@ -566,6 +586,8 @@ const CONFIG = {
     priceLines=[];
     const add=(price,color,title,dashed)=>{ if(!(price>0)) return;
       priceLines.push(candleSeries.createPriceLine({ price:price, color:color, lineWidth:2, lineStyle: dashed?2:0, axisLabelVisible:true, title:title })); };
+    add(LAST.rangeHigh,'rgba(168,85,247,0.5)','Range high',true);
+    add(LAST.vwap,'rgba(136,147,176,0.5)','VWAP',true);
     add(LAST.entry,'#8893b0','Entry');
     add(LAST.exit,'#22d3ee','Free-roll exit');
     add(LAST.stop,'#ff5d73','Stop',true);
@@ -586,6 +608,7 @@ const CONFIG = {
     initChart(); candleSeries.setData(candles); chart.timeScale().fitContent();
     els.tvPlaceholder.style.display='none';
     currentSymbol=sym; sessionHigh=0; chartActive=true;
+    lastCandles=candles; calc(); // recompute targets + overlay levels from the new bars
     drawLevels(); startPolling();
   }
   function startPolling(){ stopPolling(); pollQuote(); quoteTimer=setInterval(pollQuote, 15000); }
@@ -625,8 +648,61 @@ const CONFIG = {
       '</svg>';
   }
 
+  /* ---- Suggested target zones, derived from the loaded candles + your risk ---- */
+  function candleStats(){
+    if(!lastCandles || !lastCandles.length) return null;
+    const n=lastCandles.length, recentFrom=Math.floor(n*0.8);
+    let hi=-Infinity, recentHi=-Infinity, pv=0, vol=0;
+    lastCandles.forEach((b,i)=>{
+      if(b.high>hi) hi=b.high;
+      if(i>=recentFrom && b.high>recentHi) recentHi=b.high;
+      const typ=(b.high+b.low+b.close)/3; pv+=typ*(b.volume||0); vol+=(b.volume||0);
+    });
+    return { rangeHigh:hi, recentHigh:(recentHi>-Infinity?recentHi:hi), vwap: vol>0 ? pv/vol : null };
+  }
+  function computeTargets(entry, stop){
+    const out=[];
+    if(entry>0 && stop>0 && stop<entry){ const R=entry-stop;
+      [2,3].forEach(m=> out.push({ price:entry+R*m, basis:m+'R', cls:'r' })); }
+    const st=candleStats();
+    if(st){
+      if(st.recentHigh>entry) out.push({ price:st.recentHigh, basis:'Recent high', cls:'lvl' });
+      if(st.rangeHigh>entry && Math.abs(st.rangeHigh-st.recentHigh)/st.rangeHigh>0.005) out.push({ price:st.rangeHigh, basis:'Range high', cls:'lvl' });
+      if(st.vwap && st.vwap>entry) out.push({ price:st.vwap, basis:'VWAP', cls:'lvl' });
+    }
+    const seen=[], keep=[];
+    out.filter(t=>t.price>entry).sort((a,b)=>a.price-b.price).forEach(t=>{
+      if(seen.some(p=>Math.abs(p-t.price)/t.price<0.005)) return; seen.push(t.price); keep.push(t);
+    });
+    return keep;
+  }
+  function renderTargets(entry, stop, exit){
+    const targets=computeTargets(entry, stop);
+    if(!targets.length){
+      els.targetChips.innerHTML='';
+      els.targetHint.textContent = lastCandles
+        ? 'No resistance above entry in the loaded range — price may be at highs. Set a stop for risk-based (R-multiple) targets.'
+        : 'Add a stop for risk-based (R-multiple) targets, and Connect a chart below to pull levels from recent price action.';
+      return;
+    }
+    els.targetHint.textContent = 'Tap a target to set your exit. R-multiples are risk-based off your stop; levels come from the chart.';
+    els.targetChips.innerHTML = targets.map(t=>{
+      const active = exit>0 && Math.abs(t.price-exit)/t.price<0.005 ? ' active':'';
+      return '<button type="button" class="tchip '+t.cls+active+'" data-price="'+t.price.toFixed(4)+'">'+
+        '<span class="tprice">'+fmt$(t.price)+'</span><span class="tbasis">'+t.basis+'</span></button>';
+    }).join('');
+    els.targetChips.querySelectorAll('.tchip').forEach(btn=>{
+      btn.addEventListener('click',()=>{ els.exit.value=(+btn.dataset.price).toFixed(2); calc(); });
+    });
+  }
+
   function calc(){
     const entry=+els.entry.value, exit=+els.exit.value, stop=+els.stop.value;
+    // refresh target ideas + chart reference levels (works even before a full valid trade)
+    const _st=candleStats();
+    LAST.vwap = _st && _st.vwap>0 ? _st.vwap : null;
+    LAST.rangeHigh = _st && _st.rangeHigh>0 ? _st.rangeHigh : null;
+    renderTargets(entry, stop, exit);
     let N = sizeMode==='shares' ? +els.shares.value : (entry>0 ? (+els.capital.value)/entry : 0);
     if(rounding==='whole') N = Math.floor(N);
 
@@ -760,6 +836,7 @@ const CONFIG = {
     els.ladderEmpty.classList.remove('hidden'); els.ladderEmpty.textContent='Add a stop-loss above to map your risk zone.';
     els.scenarios.innerHTML='';
     if(els.suggestCard){ els.suggestCard.classList.add('warn'); els.suggestText.innerHTML='Enter a valid trade above to plan a trailing stop.'; els.stairWrap.innerHTML=''; els.trailRows.innerHTML=''; }
+    if(chartActive) drawLevels(); // keep VWAP / range-high references visible
   }
 })();
 </script>
