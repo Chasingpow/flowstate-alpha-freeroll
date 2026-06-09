@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#070a14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Free Roll">
+<title>FlowState Alpha &middot; Free Roll Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#070a14; --bg2:#0b1020;
+    --panel:rgba(18,24,43,0.72); --panel-solid:#11172b;
+    --line:rgba(120,140,190,0.14); --line-strong:rgba(140,160,210,0.28);
+    --txt:#e8edf9; --muted:#8893b0; --faint:#5b6b8a;
+    --cyan:#22d3ee; --violet:#a855f7; --green:#34e0a1; --red:#ff5d73; --amber:#ffb454;
+    --discord:#5865F2;
+    --grad:linear-gradient(110deg,#22d3ee 0%,#6366f1 48%,#a855f7 100%);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Sora',system-ui,sans-serif;
+    background:
+      radial-gradient(700px 500px at 10% -10%, rgba(34,211,238,0.12), transparent 60%),
+      radial-gradient(700px 600px at 100% 0%, rgba(168,85,247,0.14), transparent 55%),
+      var(--bg);
+    color:var(--txt); min-height:100%; -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+  .hidden{display:none!important}
+
+  /* ---------- Logo ---------- */
+  .logo{display:flex;align-items:center;gap:11px}
+  .logo .mark{width:38px;height:38px;border-radius:11px;flex:0 0 38px;
+    background:var(--grad);display:grid;place-items:center;
+    box-shadow:0 6px 18px -6px rgba(99,102,241,.7);position:relative;overflow:hidden}
+  .logo .mark::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(180deg,rgba(255,255,255,.22),transparent 55%)}
+  .logo .mark svg{position:relative;z-index:1}
+  .logo .word{line-height:1}
+  .logo .word .t1{font-weight:800;font-size:16px;letter-spacing:-.01em;display:block}
+  .logo .word .t2{font-size:9.5px;letter-spacing:.34em;text-transform:uppercase;color:var(--cyan);font-weight:600;margin-top:3px;display:block}
+
+  /* ---------- Gate ---------- */
+  #gate{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:32px 22px;text-align:center;gap:0}
+  #gate .biglogo{margin-bottom:26px;transform:scale(1.15)}
+  #gate h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-bottom:10px;
+    background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  #gate p.lead{color:var(--muted);font-size:14.5px;line-height:1.55;max-width:330px;margin-bottom:28px}
+  .dbtn{display:inline-flex;align-items:center;gap:11px;background:var(--discord);color:#fff;
+    border:none;font-family:'Sora';font-size:15px;font-weight:600;padding:14px 26px;border-radius:13px;
+    cursor:pointer;transition:transform .12s,box-shadow .12s;box-shadow:0 10px 28px -10px rgba(88,101,242,.8)}
+  .dbtn:hover{transform:translateY(-2px);box-shadow:0 16px 34px -10px rgba(88,101,242,.9)}
+  .dbtn:active{transform:translateY(0)}
+  .gate-status{margin-top:18px;font-size:13px;color:var(--muted);min-height:20px}
+  .gate-status.err{color:var(--red)}
+  .gate-status.ok{color:var(--green)}
+  .preview-link{margin-top:26px;font-size:12.5px;color:var(--faint);background:none;border:none;cursor:pointer;
+    text-decoration:underline;text-underline-offset:3px;font-family:'Sora'}
+  .preview-link:hover{color:var(--muted)}
+  .setup-note{margin-top:24px;max-width:360px;font-size:11.5px;color:var(--faint);line-height:1.55;
+    border:1px dashed var(--line-strong);border-radius:11px;padding:12px 14px;text-align:left}
+  .setup-note b{color:var(--amber)}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(136,147,176,.3);
+    border-top-color:var(--cyan);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* ---------- App shell ---------- */
+  #app{max-width:500px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+  .appbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;
+    padding:14px 18px;padding-top:max(14px,env(safe-area-inset-top));
+    background:rgba(7,10,20,0.82);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+  .appbar .spacer{flex:1}
+  .pill{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--txt);
+    background:rgba(52,224,161,.12);border:1px solid rgba(52,224,161,.3);border-radius:999px;padding:6px 11px}
+  .pill .av{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green)}
+  .pill.preview{background:rgba(255,180,84,.12);border-color:rgba(255,180,84,.35)}
+  .pill.preview .av{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+
+  .content{flex:1;padding:18px 16px 8px}
+  .hero{margin-bottom:18px}
+  .hero .eyebrow{font-size:10.5px;letter-spacing:.3em;text-transform:uppercase;color:var(--cyan);font-weight:600;margin-bottom:8px}
+  .hero h2{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.05;
+    background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .hero p{color:var(--muted);font-size:13px;line-height:1.5;margin-top:8px}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;
+    backdrop-filter:blur(14px);box-shadow:0 24px 60px -34px rgba(0,0,0,.8);margin-bottom:16px}
+  .panel h3{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:16px}
+
+  .field{margin-bottom:16px}
+  .field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:7px;font-weight:500}
+  .input-shell{position:relative;display:flex;align-items:center}
+  .input-shell .prefix,.input-shell .suffix{position:absolute;color:var(--faint);font-size:14px;font-family:'JetBrains Mono',monospace;pointer-events:none}
+  .prefix{left:14px}.suffix{right:14px}
+  input[type=number]{width:100%;background:#0a0f1f;border:1px solid var(--line-strong);border-radius:11px;
+    color:var(--txt);font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;
+    padding:13px 14px 13px 28px;outline:none;transition:border .15s,box-shadow .15s}
+  input.pad-suffix{padding-right:46px}
+  input[type=number]:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(34,211,238,.14)}
+  input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+  .seg{display:flex;background:#0a0f1f;border:1px solid var(--line-strong);border-radius:11px;padding:4px;gap:4px}
+  .seg button{flex:1;border:none;background:transparent;color:var(--muted);font-family:'Sora';font-size:12.5px;font-weight:600;
+    padding:10px 6px;border-radius:8px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .seg button.active{background:var(--grad);color:#06080f;box-shadow:0 4px 14px -4px rgba(99,102,241,.6)}
+  .seg button:not(.active):hover{color:var(--txt)}
+  .hint{font-size:11.5px;color:var(--faint);margin-top:7px;line-height:1.45}
+  .hint b{color:var(--cyan);font-family:'JetBrains Mono',monospace;font-weight:600}
+
+  .floor-card{border-radius:14px;padding:15px 16px;margin-bottom:16px;
+    border:1px solid rgba(52,224,161,.3);background:linear-gradient(135deg,rgba(52,224,161,.10),rgba(34,211,238,.05))}
+  .floor-card.warn{border-color:rgba(255,180,84,.4);background:linear-gradient(135deg,rgba(255,180,84,.1),rgba(255,93,115,.05))}
+  .floor-card .flabel{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:6px}
+  .floor-card .fbig{font-size:13.5px;line-height:1.5}
+  .floor-card .fbig b{color:var(--green);font-family:'JetBrains Mono',monospace;font-size:15px}
+  .floor-card.warn .fbig b{color:var(--amber)}
+
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+  .stat{background:#0a0f1f;border:1px solid var(--line);border-radius:13px;padding:13px 14px;position:relative;overflow:hidden}
+  .stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--grad);opacity:.8}
+  .stat .k{font-size:11.5px;color:var(--muted);margin-bottom:5px;font-weight:500}
+  .stat .v{font-family:'JetBrains Mono',monospace;font-size:21px;font-weight:700;letter-spacing:-.01em}
+  .stat .v small{font-size:12px;color:var(--faint);font-weight:500}
+  .stat .sub2{font-size:11px;color:var(--faint);margin-top:4px;font-family:'JetBrains Mono',monospace}
+  .v.cyan{color:var(--cyan)}.v.violet{color:#c084fc}.v.green{color:var(--green)}.v.txt{color:var(--txt)}
+
+  .tbl-title{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);font-weight:600;margin:4px 0 12px}
+  .ladder-block{margin-bottom:20px}
+  .cap-house{font-size:11px;color:var(--green);text-align:center;padding:8px;border:1px dashed rgba(52,224,161,.35);border-bottom:none;border-radius:10px 10px 0 0;background:rgba(52,224,161,.06)}
+  .track{position:relative;height:240px;border:1px solid var(--line-strong);border-top:none;border-radius:0 0 10px 10px;overflow:hidden;background:#0a0f1f}
+  .seg-expo{position:absolute;left:0;right:0;top:0;background:linear-gradient(to bottom,rgba(255,180,84,.04),rgba(255,180,84,.18))}
+  .seg-loss{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(to bottom,rgba(255,93,115,.06),rgba(255,93,115,.20))}
+  .rung{position:absolute;left:0;right:0;transform:translateY(-50%);display:flex;align-items:center;gap:9px;padding:0 14px;z-index:2}
+  .rung .line{height:0;border-top:1.5px dashed;flex:0 0 30px}
+  .rung .rlabel{font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.3}
+  .rung .rlabel b{font-size:13px}
+  .rung .rlabel small{display:block;color:var(--faint);font-size:10px;margin-top:1px}
+  .rung.exit .line{border-color:var(--cyan)} .rung.exit .rlabel b{color:var(--cyan)}
+  .rung.entry .line{border-color:var(--muted)} .rung.entry .rlabel b{color:var(--txt)}
+  .rung.stop .line{border-color:var(--red)} .rung.stop .rlabel b{color:var(--red)}
+  .ladder-empty{font-size:12.5px;color:var(--faint);padding:20px;text-align:center;border:1px dashed var(--line-strong);border-radius:12px;line-height:1.5}
+
+  table{width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace}
+  th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);font-weight:600;text-align:right;padding:7px 6px;border-bottom:1px solid var(--line-strong)}
+  th:first-child{text-align:left}
+  td{font-size:12.5px;padding:9px 6px;text-align:right;border-bottom:1px solid var(--line)}
+  td:first-child{text-align:left;color:var(--muted)}
+  tr.now td{background:rgba(34,211,238,.06)}
+  tr.now td:first-child{color:var(--cyan);font-weight:600}
+  .pos{color:var(--green)}.neg{color:var(--red)}.flat{color:var(--muted)}
+  .badge{font-size:9px;padding:2px 6px;border-radius:6px;background:rgba(34,211,238,.14);color:var(--cyan);margin-left:6px;font-family:'Sora';letter-spacing:.04em;vertical-align:middle}
+
+  /* text inputs share number styling */
+  input[type=text]{width:100%;background:#0a0f1f;border:1px solid var(--line-strong);border-radius:11px;
+    color:var(--txt);font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;
+    padding:13px 14px;outline:none;transition:border .15s,box-shadow .15s;letter-spacing:.02em}
+  input[type=text]:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(34,211,238,.14)}
+
+  .floor-card.info{border-color:rgba(34,211,238,.32);background:linear-gradient(135deg,rgba(34,211,238,.10),rgba(168,85,247,.05))}
+  .floor-card.info .fbig b{color:var(--cyan)}
+
+  /* trailing stair viz */
+  #stairWrap{background:#0a0f1f;border:1px solid var(--line);border-radius:12px;padding:12px 12px 8px;margin-bottom:10px}
+  .stair-legend{display:flex;gap:16px;justify-content:center;margin-top:6px;font-size:10.5px;color:var(--muted)}
+  .stair-legend span{display:inline-flex;align-items:center;gap:6px}
+  .stair-legend i{width:14px;height:0;border-top:2px solid}
+  .stair-legend .lp{border-image:linear-gradient(90deg,#22d3ee,#a855f7) 1;border-top-style:solid}
+  .stair-legend .ls{border-top-style:dashed;border-color:var(--red)}
+
+  /* live chart */
+  .sym-row{display:flex;gap:9px;align-items:stretch;margin-bottom:8px}
+  .loadbtn{border:none;background:var(--grad);color:#06080f;font-family:'Sora';font-weight:700;font-size:14px;
+    padding:0 20px;border-radius:11px;cursor:pointer;white-space:nowrap;box-shadow:0 6px 18px -8px rgba(99,102,241,.7)}
+  .loadbtn:active{transform:translateY(1px)}
+  .tv-wrap{position:relative;height:360px;border:1px solid var(--line-strong);border-radius:12px;overflow:hidden;background:#0a0f1f;margin-top:12px}
+  .tv-placeholder{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;
+    font-size:13px;color:var(--faint);line-height:1.5}
+  .livebar{display:flex;align-items:baseline;gap:12px;padding:10px 14px;margin-top:10px;
+    background:#0a0f1f;border:1px solid var(--line-strong);border-radius:11px;font-family:'JetBrains Mono',monospace}
+  .livebar .lp{font-size:22px;font-weight:700;color:var(--txt)}
+  .livebar .lc{font-size:13px;font-weight:600}
+  .livebar .lc.pos{color:var(--green)} .livebar .lc.neg{color:var(--red)}
+  .livebar .lh{font-size:11px;color:var(--faint);margin-left:auto}
+
+  /* ---------- Footer ---------- */
+  footer{padding:20px 18px max(26px,env(safe-area-inset-bottom));border-top:1px solid var(--line);margin-top:6px}
+  footer .fdisc{font-size:11px;color:var(--faint);line-height:1.6;text-align:center;max-width:440px;margin:0 auto}
+  footer .fdisc b{color:var(--muted)}
+  footer .fbottom{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  footer .copy{font-size:10.5px;color:var(--faint);letter-spacing:.06em}
+  footer .signout{font-size:10.5px;color:var(--faint);background:none;border:none;cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-family:'Sora'}
+  footer .signout:hover{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ============ GATE ============ -->
+<div id="gate">
+  <div class="biglogo">
+    <div class="logo">
+      <span class="mark"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M5 17C8 17 8 7 12 7C16 7 16 17 19 17" stroke="white" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="12" r="1.7" fill="white"/></svg></span>
+      <span class="word"><span class="t1">FlowState</span><span class="t2">Alpha</span></span>
+    </div>
+  </div>
+  <h1>Members Only</h1>
+  <p class="lead">The Free Roll Calculator is a FlowState Alpha member tool. Sign in with Discord to confirm you're in the server.</p>
+  <button class="dbtn" id="loginBtn">
+    <svg width="22" height="17" viewBox="0 0 71 55" fill="none"><path d="M60.1 4.9A58.5 58.5 0 0 0 45.6.5a.2.2 0 0 0-.2.1c-.6 1.1-1.3 2.6-1.8 3.7a54 54 0 0 0-16.2 0c-.5-1.2-1.2-2.6-1.9-3.7a.2.2 0 0 0-.2-.1A58.4 58.4 0 0 0 10.7 4.9a.2.2 0 0 0-.1.1C1.6 18.6-.9 31.9.4 45.1a.2.2 0 0 0 .1.2 58.9 58.9 0 0 0 17.7 9 .2.2 0 0 0 .2-.1c1.4-1.9 2.6-3.9 3.6-6a.2.2 0 0 0-.1-.3c-2-.7-3.8-1.6-5.6-2.6a.2.2 0 0 1 0-.4l1.1-.9a.2.2 0 0 1 .2 0 42 42 0 0 0 35.6 0 .2.2 0 0 1 .2 0l1.1.9a.2.2 0 0 1 0 .4c-1.8 1-3.7 1.9-5.6 2.6a.2.2 0 0 0-.1.3c1 2.1 2.3 4.1 3.6 6a.2.2 0 0 0 .2.1 58.7 58.7 0 0 0 17.8-9 .2.2 0 0 0 .1-.2c1.5-15.3-2.4-28.5-10.2-40.1a.2.2 0 0 0-.1-.1ZM23.7 37.1c-3.5 0-6.4-3.2-6.4-7.1s2.8-7.1 6.4-7.1c3.6 0 6.5 3.2 6.4 7.1 0 3.9-2.8 7.1-6.4 7.1Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.1s2.8-7.1 6.4-7.1c3.6 0 6.5 3.2 6.4 7.1 0 3.9-2.8 7.1-6.4 7.1Z" fill="white"/></svg>
+    Login with Discord
+  </button>
+  <div class="gate-status" id="gateStatus"></div>
+  <button class="preview-link" id="previewBtn">Preview the app without signing in</button>
+  <div class="setup-note hidden" id="setupNote">
+    <b>Setup needed:</b> Discord login isn't configured yet. Add your <b>Client ID</b> and <b>Server (Guild) ID</b> in the CONFIG block at the top of the script, then host this file at the redirect URL you register in the Discord Developer Portal.
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" class="hidden">
+  <div class="appbar">
+    <div class="logo">
+      <span class="mark"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M5 17C8 17 8 7 12 7C16 7 16 17 19 17" stroke="white" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="12" r="1.7" fill="white"/></svg></span>
+      <span class="word"><span class="t1">FlowState</span><span class="t2">Alpha</span></span>
+    </div>
+    <div class="spacer"></div>
+    <div class="pill" id="memberPill"><span class="av"></span><span id="memberName">Member</span></div>
+  </div>
+
+  <div class="content">
+    <div class="hero">
+      <div class="eyebrow">Position Sizing &middot; House Money</div>
+      <h2>Free Roll Calculator</h2>
+      <p>Sell enough on the way up to pull your capital back out, then let the rest ride as risk-free runners.</p>
+    </div>
+
+    <div class="panel">
+      <h3>Your Trade</h3>
+      <div class="field">
+        <label>Entry price (what you paid)</label>
+        <div class="input-shell"><span class="prefix">$</span><input type="number" id="entry" value="1.00" min="0" step="0.01"></div>
+      </div>
+      <div class="field">
+        <label>Exit price (where you're selling)</label>
+        <div class="input-shell"><span class="prefix">$</span><input type="number" id="exit" value="1.50" min="0" step="0.01"></div>
+      </div>
+      <div class="field">
+        <label>Stop-loss <span style="color:var(--faint)">(max-risk exit &mdash; optional)</span></label>
+        <div class="input-shell"><span class="prefix">$</span><input type="number" id="stop" value="0.90" min="0" step="0.01"></div>
+        <p class="hint">Where you bail if it goes against you, <i>before</i> you've recovered any capital.</p>
+      </div>
+      <div class="field">
+        <label>Position size</label>
+        <div class="seg" id="sizeMode" style="margin-bottom:10px">
+          <button data-mode="shares" class="active">By shares</button>
+          <button data-mode="capital">By capital</button>
+        </div>
+        <div class="input-shell" id="sharesWrap"><span class="prefix" style="color:var(--faint)">#</span><input type="number" id="shares" value="1000" min="0" step="1" style="padding-left:32px"></div>
+        <div class="input-shell hidden" id="capitalWrap"><span class="prefix">$</span><input type="number" id="capital" value="1000" min="0" step="10"></div>
+      </div>
+      <div class="field">
+        <label>Strategy</label>
+        <div class="seg" id="strat">
+          <button data-strat="free" class="active">Free roll</button>
+          <button data-strat="dollar">Lock $</button>
+          <button data-strat="percent">Lock %</button>
+        </div>
+        <div class="field hidden" id="dollarWrap" style="margin-top:12px;margin-bottom:0">
+          <label>Profit to lock in (cash in hand)</label>
+          <div class="input-shell"><span class="prefix">$</span><input type="number" id="lockDollar" value="200" min="0" step="10"></div>
+        </div>
+        <div class="field hidden" id="percentWrap" style="margin-top:12px;margin-bottom:0">
+          <label>Profit to lock (% of your cost)</label>
+          <div class="input-shell"><input type="number" id="lockPct" value="20" min="0" step="1" class="pad-suffix" style="padding-left:14px"><span class="suffix">%</span></div>
+        </div>
+        <p class="hint" id="stratHint"></p>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <div class="seg" id="rounding">
+          <button data-round="whole" class="active">Whole shares</button>
+          <button data-round="frac">Fractional</button>
+        </div>
+        <p class="hint">Whole-share mode rounds the sell quantity <b>up</b>, so your capital is always fully covered.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>The Plan</h3>
+      <div class="floor-card" id="floorCard">
+        <div class="flabel">After the free roll &mdash; worst case if runners go to $0</div>
+        <div class="fbig" id="floorText"></div>
+      </div>
+      <div class="floor-card warn hidden" id="riskCard">
+        <div class="flabel">Before the free roll &mdash; worst case if you're stopped out</div>
+        <div class="fbig" id="riskText"></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="k">Sell now at exit</div><div class="v cyan" id="sellShares">&mdash;</div><div class="sub2" id="sellPct"></div></div>
+        <div class="stat"><div class="k">Keep as runners</div><div class="v violet" id="runShares">&mdash;</div><div class="sub2" id="runPct"></div></div>
+        <div class="stat"><div class="k">Cash back in hand</div><div class="v txt" id="cashBack">&mdash;</div><div class="sub2" id="cashNote"></div></div>
+        <div class="stat"><div class="k">Profit locked in</div><div class="v green" id="lockedProfit">&mdash;</div><div class="sub2" id="lockedNote"></div></div>
+      </div>
+
+      <div class="ladder-block" id="ladderBlock">
+        <div class="tbl-title">Where you are in the trade</div>
+        <div class="cap-house">House money &mdash; capital recovered, runners ride free</div>
+        <div class="track" id="track">
+          <div class="seg-expo" id="segExpo"></div>
+          <div class="seg-loss" id="segLoss"></div>
+          <div class="rung exit" id="rungExit" style="top:0"><span class="line"></span><span class="rlabel" id="lblExit"></span></div>
+          <div class="rung entry" id="rungEntry"><span class="line"></span><span class="rlabel" id="lblEntry"></span></div>
+          <div class="rung stop" id="rungStop" style="top:100%"><span class="line"></span><span class="rlabel" id="lblStop"></span></div>
+        </div>
+        <div class="ladder-empty hidden" id="ladderEmpty"></div>
+      </div>
+
+      <div class="tbl-title">If the runners keep moving &mdash; total P&amp;L</div>
+      <table>
+        <thead><tr><th>Runner price</th><th>Runner value</th><th>Total profit</th><th>Return</th></tr></thead>
+        <tbody id="scenarios"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Trail Your Runners</h3>
+      <p class="hint" style="margin:-8px 0 16px">Your capital's already back, so now you ratchet a stop up <i>under</i> the runners. The higher it climbs, the more you lock in &mdash; a reversal still pays you instead of giving it all back.</p>
+      <div class="field">
+        <label>Trail method</label>
+        <div class="seg" id="trailMethod">
+          <button data-tm="pct" class="active">% below high</button>
+          <button data-tm="dollar">$ below high</button>
+        </div>
+      </div>
+      <div class="field" id="trailPctWrap">
+        <label>Trail distance below the high</label>
+        <div class="input-shell"><input id="trailPct" type="number" value="15" min="0" step="1" class="pad-suffix" style="padding-left:14px"><span class="suffix">%</span></div>
+      </div>
+      <div class="field hidden" id="trailDollarWrap">
+        <label>Trail distance below the high</label>
+        <div class="input-shell"><span class="prefix">$</span><input id="trailDollar" type="number" value="0.10" min="0" step="0.01"></div>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>Highest price reached so far</label>
+        <div class="input-shell"><span class="prefix">$</span><input id="priceNow" type="number" value="2.00" min="0" step="0.01"></div>
+        <p class="hint">Read this off the chart below &mdash; as the high climbs, your suggested stop climbs with it.</p>
+      </div>
+
+      <div class="floor-card info" id="suggestCard" style="margin-top:16px">
+        <div class="flabel">Move your stop to</div>
+        <div class="fbig" id="suggestText"></div>
+      </div>
+
+      <div class="tbl-title">How the stop ratchets up under price</div>
+      <div id="stairWrap"></div>
+      <div class="stair-legend"><span><i class="lp"></i>Price high</span><span><i class="ls"></i>Trailing stop</span></div>
+
+      <table style="margin-top:14px">
+        <thead><tr><th>If the high hits</th><th>Trail stop</th><th>Locks in total</th><th>Return</th></tr></thead>
+        <tbody id="trailRows"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Live Chart &amp; Levels</h3>
+      <div class="sym-row">
+        <input id="symInput" type="text" value="AAPL" style="flex:1;text-transform:uppercase">
+        <button class="loadbtn" id="loadChart">Connect</button>
+      </div>
+      <p class="hint">US tickers via Polygon &mdash; e.g. AAPL, GTBP, PSQH. Connect to stream the price and draw your entry, exit, stop, and trailing stop right on the candles. As price prints new highs, the trail moves up on its own.</p>
+      <div class="livebar hidden" id="liveBar">
+        <span class="lp" id="livePrice">&mdash;</span>
+        <span class="lc" id="liveChg"></span>
+        <span class="lh" id="liveHigh"></span>
+      </div>
+      <div class="tv-wrap"><div class="tv-placeholder" id="tvPlaceholder">Connect a ticker to load a live chart with your trade levels overlaid.</div><div id="lwchart" style="height:100%"></div></div>
+    </div>
+  </div>
+
+  <footer>
+    <p class="fdisc">
+      <b>Educational tool only &mdash; not financial advice.</b> FlowState Alpha is not a registered investment adviser or broker-dealer. This calculator assumes ideal fills and ignores fees, slippage, taxes, gaps, and halts. Trading involves risk of loss. Do your own research and trade your own plan.
+    </p>
+    <div class="fbottom">
+      <span class="copy">&copy; <span id="yr"></span> FlowState Alpha</span>
+      <button class="signout hidden" id="signout">Sign out</button>
+    </div>
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   DISCORD GATE CONFIG  —  fill these in, then host the file.
+   These two IDs are NOT secret; it's safe to leave them here.
+   ============================================================ */
+const CONFIG = {
+  CLIENT_ID: "1513693202660724878",   // Discord Dev Portal → your app → OAuth2 → Client ID
+  GUILD_ID:  "1477501241159585814",   // your FlowState Alpha server (Developer Mode → right-click server → Copy ID)
+  ROLE_ID:   "",                          // OPTIONAL: require a specific paid role. Leave "" to allow any server member.
+  API_BASE:  "https://flowstate-freeroll-production.up.railway.app",  // Railway backend URL. Blank = soft gate, no live data.
+  // Redirect URL must EXACTLY match one you add in Dev Portal → OAuth2 → Redirects.
+  REDIRECT_URI: (location.origin + location.pathname)
+};
+
+(function(){
+  const $ = id => document.getElementById(id);
+  const gate=$('gate'), app=$('app'), gateStatus=$('gateStatus'), setupNote=$('setupNote');
+  const configured = CONFIG.CLIENT_ID !== "YOUR_DISCORD_CLIENT_ID" && CONFIG.GUILD_ID !== "YOUR_DISCORD_SERVER_ID";
+  const API = "https://discord.com/api";
+  const SESSION = { token:null };
+
+  document.getElementById('yr').textContent = new Date().getFullYear();
+  if(!configured) setupNote.classList.remove('hidden');
+
+  function scopes(){ return CONFIG.ROLE_ID ? "identify guilds guilds.members.read" : "identify guilds"; }
+  function authHeaders(){ return SESSION.token ? { headers:{ Authorization:'Bearer '+SESSION.token } } : {}; }
+
+  $('loginBtn').addEventListener('click', ()=>{
+    if(!configured){ setupNote.classList.remove('hidden'); gateStatus.textContent="Add your Discord IDs in CONFIG first (see note below)."; gateStatus.className="gate-status err"; return; }
+    const url = API + "/oauth2/authorize?response_type=token"
+      + "&client_id=" + encodeURIComponent(CONFIG.CLIENT_ID)
+      + "&scope=" + encodeURIComponent(scopes())
+      + "&redirect_uri=" + encodeURIComponent(CONFIG.REDIRECT_URI)
+      + "&prompt=none";
+    window.location.href = url;
+  });
+
+  $('previewBtn').addEventListener('click', ()=> grant("Preview", true));
+  $('signout').addEventListener('click', ()=>{ try{location.hash="";}catch(e){} location.reload(); });
+
+  function grant(name, preview){
+    gate.classList.add('hidden'); app.classList.remove('hidden');
+    $('memberName').textContent = name || "Member";
+    const pill=$('memberPill');
+    if(preview){ pill.classList.add('preview'); } else { pill.classList.remove('preview'); $('signout').classList.remove('hidden'); }
+    calc();
+  }
+
+  // Handle OAuth implicit-grant return (token comes back in URL hash)
+  async function handleReturn(){
+    const h = new URLSearchParams((location.hash||"").replace(/^#/,""));
+    const token = h.get("access_token");
+    if(!token) return false;
+    gateStatus.innerHTML = '<span class="spin"></span>Verifying your membership…';
+    gateStatus.className = "gate-status";
+    history.replaceState(null,"",location.pathname+location.search); // strip token from URL
+
+    // Hard gate: verify through the backend, which issues a session token.
+    if(CONFIG.API_BASE){
+      try{
+        const r = await fetch(CONFIG.API_BASE+"/api/auth/verify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({discordToken:token})});
+        if(!r.ok){ const e=await r.json().catch(()=>({})); deny(e.error||"You're not in the FlowState Alpha server."); return true; }
+        const d = await r.json(); SESSION.token = d.token;
+        grant(d.user? "@"+d.user : "Member", false);
+      }catch(err){ deny("Couldn't reach the membership server. Try again."); }
+      return true;
+    }
+
+    // Soft gate fallback: verify guild membership client-side.
+    try{
+      const guildsRes = await fetch(API+"/users/@me/guilds",{headers:{Authorization:"Bearer "+token}});
+      if(!guildsRes.ok) throw new Error("guilds");
+      const guilds = await guildsRes.json();
+      const inServer = Array.isArray(guilds) && guilds.some(g=>g.id===CONFIG.GUILD_ID);
+      if(!inServer){ deny("You're not in the FlowState Alpha server."); return true; }
+
+      let name = "Member";
+      try{ const me = await (await fetch(API+"/users/@me",{headers:{Authorization:"Bearer "+token}})).json(); if(me.username) name="@"+me.username; }catch(e){}
+
+      if(CONFIG.ROLE_ID){
+        const memRes = await fetch(API+"/users/@me/guilds/"+CONFIG.GUILD_ID+"/member",{headers:{Authorization:"Bearer "+token}});
+        if(!memRes.ok) throw new Error("member");
+        const mem = await memRes.json();
+        if(!(mem.roles||[]).includes(CONFIG.ROLE_ID)){ deny("Your account doesn't have the required member role."); return true; }
+      }
+      grant(name,false);
+    }catch(err){
+      deny("Couldn't verify with Discord. Please try again.");
+    }
+    return true;
+  }
+  function deny(msg){ gateStatus.textContent = msg; gateStatus.className="gate-status err"; }
+
+  handleReturn();
+
+  /* ===================== CALCULATOR ===================== */
+  const els = {
+    entry:$('entry'), exit:$('exit'), stop:$('stop'), shares:$('shares'), capital:$('capital'),
+    lockDollar:$('lockDollar'), lockPct:$('lockPct'),
+    sharesWrap:$('sharesWrap'), capitalWrap:$('capitalWrap'),
+    dollarWrap:$('dollarWrap'), percentWrap:$('percentWrap'), stratHint:$('stratHint'),
+    floorCard:$('floorCard'), floorText:$('floorText'), riskCard:$('riskCard'), riskText:$('riskText'),
+    ladderBlock:$('ladderBlock'), track:$('track'), ladderEmpty:$('ladderEmpty'),
+    segExpo:$('segExpo'), segLoss:$('segLoss'), rungEntry:$('rungEntry'),
+    lblExit:$('lblExit'), lblEntry:$('lblEntry'), lblStop:$('lblStop'),
+    sellShares:$('sellShares'), sellPct:$('sellPct'), runShares:$('runShares'), runPct:$('runPct'),
+    cashBack:$('cashBack'), cashNote:$('cashNote'), lockedProfit:$('lockedProfit'), lockedNote:$('lockedNote'),
+    scenarios:$('scenarios'),
+    trailPct:$('trailPct'), trailDollar:$('trailDollar'), trailPctWrap:$('trailPctWrap'), trailDollarWrap:$('trailDollarWrap'),
+    priceNow:$('priceNow'), suggestCard:$('suggestCard'), suggestText:$('suggestText'),
+    stairWrap:$('stairWrap'), trailRows:$('trailRows'),
+    symInput:$('symInput'), loadChart:$('loadChart'), tvPlaceholder:$('tvPlaceholder'),
+    liveBar:$('liveBar'), livePrice:$('livePrice'), liveChg:$('liveChg'), liveHigh:$('liveHigh')
+  };
+  let sizeMode='shares', strat='free', rounding='whole', trailMethod='pct';
+
+  const fmt$ = n => (n<0?'-$':'$') + Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtSh = n => (Math.round(n*1e6)/1e6).toLocaleString('en-US',{maximumFractionDigits: rounding==='whole'?0:4});
+  const fmtPct = n => (n>=0?'+':'') + n.toLocaleString('en-US',{maximumFractionDigits:0}) + '%';
+
+  function bindSeg(wrapId, cb){
+    document.querySelectorAll('#'+wrapId+' button').forEach(b=>{
+      b.addEventListener('click',()=>{
+        document.querySelectorAll('#'+wrapId+' button').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active'); cb(b); calc();
+      });
+    });
+  }
+  bindSeg('sizeMode', b=>{ sizeMode=b.dataset.mode;
+    els.sharesWrap.classList.toggle('hidden', sizeMode!=='shares');
+    els.capitalWrap.classList.toggle('hidden', sizeMode!=='capital'); });
+  bindSeg('strat', b=>{ strat=b.dataset.strat;
+    els.dollarWrap.classList.toggle('hidden', strat!=='dollar');
+    els.percentWrap.classList.toggle('hidden', strat!=='percent'); });
+  bindSeg('rounding', b=>{ rounding=b.dataset.round; });
+  bindSeg('trailMethod', b=>{ trailMethod=b.dataset.tm;
+    els.trailPctWrap.classList.toggle('hidden', trailMethod!=='pct');
+    els.trailDollarWrap.classList.toggle('hidden', trailMethod!=='dollar'); });
+  ['entry','exit','stop','shares','capital','lockDollar','lockPct','trailPct','trailDollar','priceNow'].forEach(k=> els[k].addEventListener('input', calc));
+
+  // ---- Live chart (TradingView Lightweight Charts) fed by the Railway/Polygon backend ----
+  const LAST = { entry:0, exit:0, stop:null, trail:null };
+  let lwcLoaded=false, chart=null, candleSeries=null, priceLines=[], quoteTimer=null, currentSymbol=null, sessionHigh=0, chartActive=false;
+
+  function loadLWC(){
+    return new Promise(resolve=>{
+      if(lwcLoaded && window.LightweightCharts) return resolve();
+      const s=document.createElement('script');
+      s.src='https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js';
+      s.onload=()=>{ lwcLoaded=true; resolve(); };
+      s.onerror=()=>{ els.tvPlaceholder.style.display='grid'; els.tvPlaceholder.textContent='Charting library is blocked in this preview — it loads once the app is hosted on your domain.'; resolve(); };
+      document.head.appendChild(s);
+    });
+  }
+  function initChart(){
+    if(chart) return;
+    chart = LightweightCharts.createChart(document.getElementById('lwchart'),{
+      autoSize:true,
+      layout:{ background:{color:'#0a0f1f'}, textColor:'#8893b0', fontFamily:"'JetBrains Mono', monospace" },
+      grid:{ vertLines:{color:'rgba(120,140,190,0.07)'}, horzLines:{color:'rgba(120,140,190,0.07)'} },
+      timeScale:{ timeVisible:true, secondsVisible:false, borderColor:'rgba(140,160,210,0.28)' },
+      rightPriceScale:{ borderColor:'rgba(140,160,210,0.28)' },
+      crosshair:{ mode:0 }
+    });
+    candleSeries = chart.addCandlestickSeries({ upColor:'#34e0a1', downColor:'#ff5d73', wickUpColor:'#34e0a1', wickDownColor:'#ff5d73', borderVisible:false });
+  }
+  function drawLevels(){
+    if(!candleSeries) return;
+    priceLines.forEach(l=>{ try{ candleSeries.removePriceLine(l); }catch(e){} });
+    priceLines=[];
+    const add=(price,color,title,dashed)=>{ if(!(price>0)) return;
+      priceLines.push(candleSeries.createPriceLine({ price:price, color:color, lineWidth:2, lineStyle: dashed?2:0, axisLabelVisible:true, title:title })); };
+    add(LAST.entry,'#8893b0','Entry');
+    add(LAST.exit,'#22d3ee','Free-roll exit');
+    add(LAST.stop,'#ff5d73','Stop',true);
+    add(LAST.trail,'#ffb454','Trail',true);
+  }
+  async function connectSymbol(){
+    const sym=(els.symInput.value||'').trim().toUpperCase(); if(!sym) return;
+    if(!CONFIG.API_BASE){ els.tvPlaceholder.style.display='grid'; els.tvPlaceholder.textContent='Set CONFIG.API_BASE to your Railway backend URL to enable live charts and data.'; return; }
+    els.tvPlaceholder.style.display='grid'; els.tvPlaceholder.textContent='Loading '+sym+'…';
+    await loadLWC(); if(!window.LightweightCharts) return;
+    let candles;
+    try{
+      const r=await fetch(CONFIG.API_BASE+'/api/candles?symbol='+encodeURIComponent(sym)+'&res=5&days=5', authHeaders());
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||'data error'); }
+      candles=await r.json();
+    }catch(e){ els.tvPlaceholder.style.display='grid'; els.tvPlaceholder.textContent='Couldn\u2019t load '+sym+': '+e.message; return; }
+    if(!candles.length){ els.tvPlaceholder.style.display='grid'; els.tvPlaceholder.textContent='No recent bars for '+sym+'.'; return; }
+    initChart(); candleSeries.setData(candles); chart.timeScale().fitContent();
+    els.tvPlaceholder.style.display='none';
+    currentSymbol=sym; sessionHigh=0; chartActive=true;
+    drawLevels(); startPolling();
+  }
+  function startPolling(){ stopPolling(); pollQuote(); quoteTimer=setInterval(pollQuote, 15000); }
+  function stopPolling(){ if(quoteTimer) clearInterval(quoteTimer); quoteTimer=null; }
+  async function pollQuote(){
+    if(!currentSymbol || !CONFIG.API_BASE) return;
+    try{
+      const r=await fetch(CONFIG.API_BASE+'/api/quote?symbol='+encodeURIComponent(currentSymbol), authHeaders());
+      if(!r.ok) return; const q=await r.json();
+      els.liveBar.classList.remove('hidden');
+      els.livePrice.textContent=fmt$(q.price);
+      els.liveChg.textContent=(q.changePct>=0?'+':'')+(q.changePct||0).toFixed(2)+'%';
+      els.liveChg.className='lc '+((q.changePct||0)>=0?'pos':'neg');
+      if(q.price>sessionHigh){ sessionHigh=q.price; els.priceNow.value=sessionHigh.toFixed(2); calc(); } // ratchet the trail up on new highs
+      els.liveHigh.textContent='session high '+fmt$(sessionHigh||q.price);
+    }catch(e){}
+  }
+  els.loadChart.addEventListener('click', connectSymbol);
+  els.symInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); connectSymbol(); }});
+
+  // ---- stair visualization: trailing stop ratcheting under price ----
+  function stairSVG(highs, trailStopFn){
+    const W=320,H=120,pad=10, maxV=highs[highs.length-1]||1;
+    const x=i=>pad+i*(W-2*pad)/(Math.max(1,highs.length-1));
+    const y=v=>H-pad-(v/maxV)*(H-2*pad);
+    const pricePts=highs.map((h,i)=>x(i)+','+y(h)).join(' ');
+    const stopPts=highs.map((h,i)=>x(i)+','+y(trailStopFn(h))).join(' ');
+    let area='M '+x(0)+' '+y(highs[0]);
+    highs.forEach((h,i)=>{ area+=' L '+x(i)+' '+y(h); });
+    for(let i=highs.length-1;i>=0;i--){ area+=' L '+x(i)+' '+y(trailStopFn(highs[i])); }
+    area+=' Z';
+    return '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:120px">'+
+      '<defs><linearGradient id="gline" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs>'+
+      '<path d="'+area+'" fill="rgba(255,180,84,.10)" stroke="none"/>'+
+      '<polyline points="'+stopPts+'" fill="none" stroke="#ff5d73" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>'+
+      '<polyline points="'+pricePts+'" fill="none" stroke="url(#gline)" stroke-width="2.4" vector-effect="non-scaling-stroke"/>'+
+      '</svg>';
+  }
+
+  function calc(){
+    const entry=+els.entry.value, exit=+els.exit.value, stop=+els.stop.value;
+    let N = sizeMode==='shares' ? +els.shares.value : (entry>0 ? (+els.capital.value)/entry : 0);
+    if(rounding==='whole') N = Math.floor(N);
+
+    if(!(entry>0) || !(exit>0) || !(N>0)){ setIdle('Enter a valid entry price, exit price, and position size.'); return; }
+    const cost = N*entry;
+
+    let lockTarget = 0;
+    if(strat==='dollar') lockTarget = Math.max(0,+els.lockDollar.value);
+    if(strat==='percent') lockTarget = Math.max(0,(+els.lockPct.value)/100*cost);
+
+    const minExit = (cost+lockTarget)/N;
+    els.stratHint.innerHTML = strat==='free'
+      ? 'Sells just enough to claw back your full cost. Any exit above entry works.'
+      : 'To bank this <i>and</i> keep runners, exit must be above <b>'+fmt$(minExit)+'</b>/share.';
+
+    if(exit<=entry){ setIdle('Exit price is at or below your entry &mdash; you can\u2019t pull capital out and still hold shares. You\u2019d need to sell at a profit first.'); return; }
+
+    const cashTarget = cost + lockTarget;
+    let sellRaw = cashTarget/exit;
+    let sell = rounding==='whole' ? Math.ceil(sellRaw) : sellRaw;
+    let unreachable=false;
+    if(sell>=N){ sell=N; unreachable=true; }
+    const runners = Math.max(0, N-sell);
+    const cashBack = sell*exit;
+    const lockedProfit = cashBack-cost;
+
+    els.sellShares.innerHTML = fmtSh(sell)+' <small>sh</small>';
+    els.sellPct.textContent = (sell/N*100).toFixed(1)+'% @ '+fmt$(exit);
+    els.runShares.innerHTML = fmtSh(runners)+' <small>sh</small>';
+    els.runPct.textContent = (runners/N*100).toFixed(1)+'% riding free';
+    els.cashBack.textContent = fmt$(cashBack);
+    els.cashNote.textContent = 'cost was '+fmt$(cost);
+    els.lockedProfit.textContent = fmt$(lockedProfit);
+    els.lockedNote.textContent = cost>0 ? fmtPct(lockedProfit/cost*100)+' on cost' : '';
+
+    els.floorCard.classList.toggle('warn', unreachable);
+    els.floorText.innerHTML = unreachable
+      ? 'At this exit you\u2019d have to sell <b>your whole position</b> to hit that target &mdash; no runners left. Raise the exit above '+fmt$(minExit)+', or lower the profit you\u2019re locking.'
+      : 'You\u2019ve got your <b>'+fmt$(cashBack)+'</b> back in cash. If every runner goes to zero, you still walk away <b>'+fmt$(lockedProfit)+'</b> ahead. You can\u2019t lose from here.';
+
+    // stop-loss risk + ladder
+    const stopValid = stop>0 && stop<entry;
+    if(stopValid){
+      const maxRisk = N*(entry-stop);
+      const riskPct = cost>0 ? maxRisk/cost*100 : 0;
+      const rr = (entry-stop)>0 ? (exit-entry)/(entry-stop) : 0;
+      els.riskCard.classList.remove('hidden');
+      els.riskText.innerHTML = 'Until price reaches your exit you\u2019re fully exposed. Get stopped at <b>'+fmt$(stop)+
+        '</b> and you lose <b>'+fmt$(maxRisk)+'</b> ('+riskPct.toFixed(1)+'% of capital). Reward\u2011to\u2011risk to your exit is <b>'+rr.toFixed(1)+' : 1</b>.';
+      els.ladderEmpty.classList.add('hidden'); els.track.classList.remove('hidden');
+      const span = exit-stop;
+      const entryTop = span>0 ? (1-(entry-stop)/span)*100 : 50;
+      els.segExpo.style.height = entryTop+'%';
+      els.segLoss.style.top = entryTop+'%'; els.segLoss.style.height = (100-entryTop)+'%';
+      els.rungEntry.style.top = entryTop+'%';
+      els.lblExit.innerHTML  = '<b>'+fmt$(exit)+'</b><small>free-roll trigger \u2192 house money</small>';
+      els.lblEntry.innerHTML = '<b>'+fmt$(entry)+'</b><small>breakeven</small>';
+      els.lblStop.innerHTML  = '<b>'+fmt$(stop)+'</b><small>stopped: '+fmt$(-maxRisk)+'</small>';
+    } else {
+      els.riskCard.classList.add('hidden'); els.track.classList.add('hidden'); els.ladderEmpty.classList.remove('hidden');
+      els.ladderEmpty.textContent = (stop>0 && stop>=entry)
+        ? 'For a long position your stop sits below entry \u2014 set a stop under '+fmt$(entry)+' to map your risk zone.'
+        : 'Add a stop-loss above to map your risk zone.';
+    }
+
+    const mults = [
+      {label:'$0.00 (wipeout)', price:0},
+      {label:'\u00d70.5 of exit', price:exit*0.5},
+      {label:fmt$(exit)+' (now)', price:exit, now:true},
+      {label:'\u00d71.5', price:exit*1.5},
+      {label:'\u00d72', price:exit*2},
+      {label:'\u00d73', price:exit*3},
+      {label:'\u00d75', price:exit*5},
+    ];
+    els.scenarios.innerHTML = mults.map(m=>{
+      const runVal = runners*m.price;
+      const totalPL = lockedProfit + runVal;
+      const ret = cost>0 ? totalPL/cost*100 : 0;
+      const plCls = totalPL>0.005?'pos':(totalPL<-0.005?'neg':'flat');
+      const badge = m.now?'<span class="badge">exit</span>':'';
+      return '<tr class="'+(m.now?'now':'')+'"><td>'+m.label+badge+'</td><td>'+fmt$(runVal)+
+        '</td><td class="'+plCls+'">'+(totalPL>=0?'+':'')+fmt$(totalPL)+'</td><td class="'+plCls+'">'+fmtPct(ret)+'</td></tr>';
+    }).join('');
+
+    // ===== Trailing stop on the runners =====
+    const tVal = trailMethod==='pct' ? Math.max(0,+els.trailPct.value) : Math.max(0,+els.trailDollar.value);
+    const trailStopFn = high => Math.max(0, trailMethod==='pct' ? high*(1-tVal/100) : high-tVal);
+    const priceNow = Math.max(0,+els.priceNow.value);
+
+    if(runners>0 && priceNow>0){
+      const sNow = trailStopFn(priceNow);
+      const lockNow = lockedProfit + runners*sNow;
+      const give = Math.max(0, priceNow - sNow);
+      const retNow = cost>0 ? lockNow/cost*100 : 0;
+      els.suggestCard.classList.remove('warn');
+      els.suggestText.innerHTML = 'Trail your <b>'+fmtSh(runners)+'</b> runners with a stop at <b>'+fmt$(sNow)+
+        '</b>. Reverse from here and you still bank <b>'+fmt$(lockNow)+'</b> total ('+fmtPct(retNow)+
+        ' on cost) \u2014 giving back '+fmt$(give)+'/sh from the high.';
+    } else {
+      els.suggestCard.classList.add('warn');
+      els.suggestText.innerHTML = runners>0
+        ? 'Enter the highest price reached to get a suggested trailing stop.'
+        : 'No runners to trail at this exit \u2014 free up some shares first (lower the locked profit or raise the exit).';
+    }
+
+    if(runners>0){
+      const highs=[exit, exit*1.5, exit*2, exit*3, exit*5];
+      els.stairWrap.innerHTML = stairSVG(highs, trailStopFn);
+      els.trailRows.innerHTML = highs.map((Hi,i)=>{
+        const s=trailStopFn(Hi), lock=lockedProfit+runners*s, ret=cost>0?lock/cost*100:0;
+        const mult=Math.round(Hi/exit*10)/10;
+        const lbl = i===0 ? fmt$(Hi)+' (exit)' : '\u00d7'+mult+' \u00b7 '+fmt$(Hi);
+        return '<tr><td>'+lbl+'</td><td>'+fmt$(s)+'</td><td class="pos">'+fmt$(lock)+'</td><td class="pos">'+fmtPct(ret)+'</td></tr>';
+      }).join('');
+    } else {
+      els.stairWrap.innerHTML=''; els.trailRows.innerHTML='';
+    }
+
+    // sync the overlay levels onto the live chart
+    LAST.entry = entry; LAST.exit = exit;
+    LAST.stop  = stopValid ? stop : null;
+    LAST.trail = (runners>0 && priceNow>0) ? trailStopFn(priceNow) : null;
+    if(chartActive) drawLevels();
+  }
+
+  function setIdle(msg){
+    els.floorCard.classList.add('warn'); els.floorText.innerHTML = msg;
+    ['sellShares','runShares','cashBack','lockedProfit'].forEach(k=>els[k].textContent='\u2014');
+    els.sellPct.textContent=els.runPct.textContent=els.cashNote.textContent=els.lockedNote.textContent='';
+    els.riskCard.classList.add('hidden'); els.track.classList.add('hidden');
+    els.ladderEmpty.classList.remove('hidden'); els.ladderEmpty.textContent='Add a stop-loss above to map your risk zone.';
+    els.scenarios.innerHTML='';
+    if(els.suggestCard){ els.suggestCard.classList.add('warn'); els.suggestText.innerHTML='Enter a valid trade above to plan a trailing stop.'; els.stairWrap.innerHTML=''; els.trailRows.innerHTML=''; }
+  }
+})();
+</script>
+</body>
+</html>
