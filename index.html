@@ -178,6 +178,7 @@
   .tchip .tbasis{font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);font-family:inherit}
   .tchip.r .tprice{color:var(--violet)}
   .tchip.lvl .tprice{color:var(--cyan)}
+  .tchip.pct .tprice{color:var(--amber)}
   .tchip.recommended{border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset}
   .tchip .tstar{color:var(--amber);font-size:10px;margin-left:3px}
   .target-rec{margin-bottom:9px;font-size:12px;color:var(--muted);line-height:1.55;
@@ -188,6 +189,17 @@
   .target-rec .rec-basis{color:var(--green);font-family:'JetBrains Mono',monospace;font-size:11px}
   .target-rec .rec-use{margin-left:7px;background:var(--green);color:#04130d;border:none;border-radius:7px;
     padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+
+  /* plan headline — the plain-language answer */
+  .plan-headline{margin-bottom:16px;padding:15px 16px;border-radius:13px;line-height:1.6;font-size:14px;
+    color:var(--txt);background:linear-gradient(135deg,rgba(34,211,238,.12),rgba(168,85,247,.07));
+    border:1px solid rgba(34,211,238,.30)}
+  .plan-headline.empty{background:#0a0f1f;border-color:var(--line);color:var(--muted);font-size:13px}
+  .plan-headline .ph-price{color:var(--cyan);font-weight:700;font-family:'JetBrains Mono',monospace}
+  .plan-headline .ph-sell{color:var(--txt);font-weight:700}
+  .plan-headline .ph-run{color:var(--violet);font-weight:700}
+  .plan-headline .ph-up{display:block;margin-top:9px;font-size:12px;color:var(--muted)}
+  .plan-headline .ph-up b{color:var(--green)}
 
   /* backtest */
   #btDays{background:#0a0f1f;border:1px solid var(--line-strong);border-radius:11px;color:var(--txt);
@@ -276,24 +288,17 @@
 
     <div class="panel">
       <h3>Your Trade</h3>
+      <p class="hint" style="margin:-8px 0 16px">Enter your <b>ticker</b>, <b>shares</b>, and <b>entry</b> — the app finds your profit-taking price and how many free runners you keep.</p>
+      <div class="field">
+        <label>Ticker</label>
+        <div class="sym-row">
+          <input id="tradeSym" type="text" value="AAPL" placeholder="TICKER" style="flex:1;text-transform:uppercase">
+          <button class="loadbtn" id="planBtn" style="background:linear-gradient(135deg,var(--cyan),var(--violet));color:#04130d;font-weight:700">Plan it</button>
+        </div>
+      </div>
       <div class="field">
         <label>Entry price (what you paid)</label>
         <div class="input-shell"><span class="prefix">$</span><input type="number" id="entry" value="1.00" min="0" step="0.01"></div>
-      </div>
-      <div class="field">
-        <label>Exit price (where you're selling)</label>
-        <div class="input-shell"><span class="prefix">$</span><input type="number" id="exit" value="1.50" min="0" step="0.01"></div>
-      </div>
-      <div class="field" id="targetField">
-        <label>Suggested exits <span style="color:var(--faint)">(tap to use)</span></label>
-        <div id="targetRec" class="target-rec hidden"></div>
-        <div class="target-chips" id="targetChips"></div>
-        <p class="hint" id="targetHint">Add a stop for risk-based (R-multiple) targets, and Connect a chart below to pull levels from recent price action.</p>
-      </div>
-      <div class="field">
-        <label>Stop-loss <span style="color:var(--faint)">(max-risk exit &mdash; optional)</span></label>
-        <div class="input-shell"><span class="prefix">$</span><input type="number" id="stop" value="0.90" min="0" step="0.01"></div>
-        <p class="hint">Where you bail if it goes against you, <i>before</i> you've recovered any capital.</p>
       </div>
       <div class="field">
         <label>Position size</label>
@@ -303,6 +308,18 @@
         </div>
         <div class="input-shell" id="sharesWrap"><span class="prefix" style="color:var(--faint)">#</span><input type="number" id="shares" value="1000" min="0" step="1" style="padding-left:32px"></div>
         <div class="input-shell hidden" id="capitalWrap"><span class="prefix">$</span><input type="number" id="capital" value="1000" min="0" step="10"></div>
+      </div>
+      <div class="field" id="targetField">
+        <label>Profit-taking price <span style="color:var(--faint)">(app-suggested — tap a target or edit)</span></label>
+        <div class="input-shell"><span class="prefix">$</span><input type="number" id="exit" value="1.50" min="0" step="0.01"></div>
+        <div id="targetRec" class="target-rec hidden" style="margin-top:10px"></div>
+        <div class="target-chips" id="targetChips" style="margin-top:8px"></div>
+        <p class="hint" id="targetHint">Hit <b>Plan it</b> to pull live levels for your ticker and auto-set this price. Higher price = more runners (you're betting it gets there).</p>
+      </div>
+      <div class="field">
+        <label>Stop-loss <span style="color:var(--faint)">(max-risk exit &mdash; optional)</span></label>
+        <div class="input-shell"><span class="prefix">$</span><input type="number" id="stop" value="0.90" min="0" step="0.01"></div>
+        <p class="hint">Optional &mdash; where you bail if it goes against you <i>before</i> you've recovered capital. Adding it also unlocks risk-based (R-multiple) profit targets.</p>
       </div>
       <div class="field">
         <label>Strategy</label>
@@ -332,6 +349,7 @@
 
     <div class="panel">
       <h3>The Plan</h3>
+      <div class="plan-headline" id="planHeadline"></div>
       <div class="floor-card" id="floorCard">
         <div class="flabel">After the free roll &mdash; worst case if runners go to $0</div>
         <div class="fbig" id="floorText"></div>
@@ -566,6 +584,7 @@ const CONFIG = {
     priceNow:$('priceNow'), suggestCard:$('suggestCard'), suggestText:$('suggestText'),
     stairWrap:$('stairWrap'), trailRows:$('trailRows'),
     targetChips:$('targetChips'), targetHint:$('targetHint'), targetRec:$('targetRec'),
+    tradeSym:$('tradeSym'), planBtn:$('planBtn'), planHeadline:$('planHeadline'),
     btSym:$('btSym'), btDays:$('btDays'), btRun:$('btRun'), btResult:$('btResult'),
     symInput:$('symInput'), loadChart:$('loadChart'), tvPlaceholder:$('tvPlaceholder'),
     liveBar:$('liveBar'), livePrice:$('livePrice'), liveChg:$('liveChg'), liveHigh:$('liveHigh')
@@ -600,6 +619,7 @@ const CONFIG = {
   const LAST = { entry:0, exit:0, stop:null, trail:null, vwap:null, rangeHigh:null };
   let lwcLoaded=false, chart=null, candleSeries=null, priceLines=[], quoteTimer=null, currentSymbol=null, sessionHigh=0, chartActive=false;
   let lastCandles=null; // most recent bars from /api/candles, used to suggest target zones
+  let lastPrice=0;      // most recent live/last quote price for the connected ticker
   let btState=null;     // current backtest result { sym, base, high, entry, stop, ... }
   let btMode='day';     // backtest resolution: 'day' or 'minute' (intraday 1m)
 
@@ -664,6 +684,7 @@ const CONFIG = {
       const r=await fetch(CONFIG.API_BASE+'/api/quote?symbol='+encodeURIComponent(currentSymbol), authHeaders());
       if(!r.ok) return; const q=await r.json();
       els.liveBar.classList.remove('hidden');
+      lastPrice=q.price||lastPrice;
       els.livePrice.textContent=fmt$(q.price);
       els.liveChg.textContent=(q.changePct>=0?'+':'')+(q.changePct||0).toFixed(2)+'%';
       els.liveChg.className='lc '+((q.changePct||0)>=0?'pos':'neg');
@@ -671,6 +692,8 @@ const CONFIG = {
       els.liveHigh.textContent='session high '+fmt$(sessionHigh||q.price);
     }catch(e){}
   }
+  els.planBtn.addEventListener('click', planFreeRoll);
+  els.tradeSym.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); planFreeRoll(); }});
   els.loadChart.addEventListener('click', connectSymbol);
   els.symInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); connectSymbol(); }});
   els.btRun.addEventListener('click', runBacktest);
@@ -720,10 +743,19 @@ const CONFIG = {
     if(entry>0 && stop>0 && stop<entry){ const R=entry-stop;
       [2,3].forEach(m=> out.push({ price:entry+R*m, basis:m+'R', cls:'r' })); }
     const st=candleStats();
+    let hasResistance=false;
     if(st){
-      if(st.recentHigh>entry) out.push({ price:st.recentHigh, basis:'Recent high', cls:'lvl' });
-      if(st.rangeHigh>entry && Math.abs(st.rangeHigh-st.recentHigh)/st.rangeHigh>0.005) out.push({ price:st.rangeHigh, basis:'Range high', cls:'lvl' });
+      if(st.recentHigh>entry){ out.push({ price:st.recentHigh, basis:'Recent high', cls:'lvl' }); hasResistance=true; }
+      if(st.rangeHigh>entry && Math.abs(st.rangeHigh-st.recentHigh)/st.rangeHigh>0.005){ out.push({ price:st.rangeHigh, basis:'Range high', cls:'lvl' }); hasResistance=true; }
       if(st.vwap && st.vwap>entry) out.push({ price:st.vwap, basis:'VWAP', cls:'lvl' });
+    }
+    // Fallback so there's ALWAYS a profit-taking price: % gains off the higher of entry/live price.
+    // Used when there's no stop and no overhead resistance (e.g. price at/near highs).
+    if(entry>0 && !hasResistance){
+      const ref=Math.max(entry, lastPrice||0);
+      [[0.25,'+25%'],[0.50,'+50%'],[1.0,'×2']].forEach(g=>{
+        const p=ref*(1+g[0]); if(p>entry) out.push({ price:p, basis:g[1], cls:'pct' });
+      });
     }
     const seen=[], keep=[];
     out.filter(t=>t.price>entry).sort((a,b)=>a.price-b.price).forEach(t=>{
@@ -748,7 +780,27 @@ const CONFIG = {
     }
     const lvl = withR.find(t=>t.cls==='lvl');
     if(lvl) return Object.assign(lvl, { why:'nearest real resistance above entry — add a stop to rank by reward-to-risk' });
-    return Object.assign(withR[0], { why:'nearest target above entry' });
+    const pick = withR[0];
+    return Object.assign(pick, { why: pick.cls==='pct'
+      ? 'a measured '+pick.basis+' move — no overhead resistance in range, so this is a momentum target'
+      : 'nearest target above entry' });
+  }
+  // Set the profit-taking price (exit) to the recommended target, then recompute.
+  function applyRecommendedExit(){
+    const entry=+els.entry.value, stop=+els.stop.value;
+    const rec=recommendTarget(entry, stop, computeTargets(entry, stop));
+    if(rec) els.exit.value=rec.price.toFixed(2);
+    calc();
+  }
+  // Primary flow: ticker + shares + entry -> pull live levels, set the profit-taking price.
+  async function planFreeRoll(){
+    const sym=(els.tradeSym.value||'').trim().toUpperCase();
+    if(sym){
+      els.symInput.value=sym; if(!els.btSym.value) els.btSym.value=sym;
+      if(CONFIG.API_BASE){ try{ await connectSymbol(); }catch(e){} } // loads candles+quote+chart, then calc()
+    }
+    applyRecommendedExit();
+    els.planHeadline.scrollIntoView({behavior:'smooth', block:'nearest'});
   }
   function renderTargets(entry, stop, exit){
     const targets=computeTargets(entry, stop);
@@ -899,6 +951,21 @@ const CONFIG = {
       ? 'At this exit you\u2019d have to sell <b>your whole position</b> to hit that target &mdash; no runners left. Raise the exit above '+fmt$(minExit)+', or lower the profit you\u2019re locking.'
       : 'You\u2019ve got your <b>'+fmt$(cashBack)+'</b> back in cash. If every runner goes to zero, you still walk away <b>'+fmt$(lockedProfit)+'</b> ahead. You can\u2019t lose from here.';
 
+    // ---- plain-language headline: the answer to "where do I take profit + how many runners?" ----
+    els.planHeadline.classList.remove('empty');
+    if(unreachable){
+      els.planHeadline.innerHTML = 'At <span class="ph-price">'+fmt$(exit)+'</span> you\u2019d have to sell <b>all '+fmtSh(N)+'</b> shares just to recover your '+fmt$(cost)+
+        ' \u2014 <b>no runners left</b>. Raise your profit-taking price above <span class="ph-price">'+fmt$(minExit)+'</span> to keep some riding free.';
+    } else {
+      const up=[['\u00d71.5', exit*1.5],['\u00d72', exit*2]];
+      if(_st && _st.rangeHigh>exit*2.02) up.push(['high '+fmt$(_st.rangeHigh), _st.rangeHigh]);
+      const upStr = up.map(u=>u[0]+' &rarr; <b>'+fmt$(runners*u[1])+'</b>').join(' &middot; ');
+      els.planHeadline.innerHTML =
+        'Take profit at <span class="ph-price">'+fmt$(exit)+'</span> \u2014 sell <span class="ph-sell">'+fmtSh(sell)+' of '+fmtSh(N)+'</span> shares to bank your full <b>'+fmt$(cost)+
+        '</b> back. That leaves <span class="ph-run">'+fmtSh(runners)+' runners</span> ('+(runners/N*100).toFixed(0)+'%) riding <b>100% free</b>.'+
+        (runners>0 ? '<span class="ph-up">If it keeps climbing, your runners are worth: '+upStr+'</span>' : '');
+    }
+
     // stop-loss risk + ladder
     const stopValid = stop>0 && stop<entry;
     if(stopValid){
@@ -987,6 +1054,8 @@ const CONFIG = {
 
   function setIdle(msg){
     els.floorCard.classList.add('warn'); els.floorText.innerHTML = msg;
+    els.planHeadline.className='plan-headline empty';
+    els.planHeadline.innerHTML='Enter your ticker, shares, and entry above, then hit <b>Plan it</b> \u2014 your profit-taking price and runner count show up here.';
     ['sellShares','runShares','cashBack','lockedProfit'].forEach(k=>els[k].textContent='\u2014');
     els.sellPct.textContent=els.runPct.textContent=els.cashNote.textContent=els.lockedNote.textContent='';
     els.riskCard.classList.add('hidden'); els.track.classList.add('hidden');
