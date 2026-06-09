@@ -812,7 +812,6 @@ const CONFIG = {
       return;
     }
     const rec = recommendTarget(entry, stop, targets);
-    els.targetHint.textContent = 'Tap a target to set your exit. R-multiples are risk-based off your stop; levels come from the chart.';
     els.targetChips.innerHTML = targets.map(t=>{
       const active = exit>0 && Math.abs(t.price-exit)/t.price<0.005 ? ' active':'';
       const isRec = rec && Math.abs(t.price-rec.price)/t.price<0.005 ? ' recommended':'';
@@ -823,13 +822,15 @@ const CONFIG = {
     els.targetChips.querySelectorAll('.tchip').forEach(btn=>{
       btn.addEventListener('click',()=>{ els.exit.value=(+btn.dataset.price).toFixed(2); calc(); });
     });
+    // compact one-line recommendation (chips are clickable, so no separate button)
     if(rec){
       els.targetRec.classList.remove('hidden');
-      els.targetRec.innerHTML = '<span class="rec-star">★</span> <b>Recommended exit '+fmt$(rec.price)+'</b> '+
-        '<span class="rec-basis">'+rec.basis+(rec.rr!=null?' · '+rec.rr.toFixed(1)+'R':'')+'</span> — '+rec.why+
-        '<button type="button" class="rec-use" id="recUse">Use this exit</button>';
-      const ru=$('recUse'); if(ru) ru.addEventListener('click',()=>{ els.exit.value=rec.price.toFixed(2); calc(); });
+      els.targetRec.innerHTML = '<span class="rec-star">★</span> Recommended <b>'+fmt$(rec.price)+'</b> '+
+        '<span class="rec-basis">'+rec.basis+(rec.rr!=null?' · '+rec.rr.toFixed(1)+'R':'')+'</span>';
     } else els.targetRec.classList.add('hidden');
+    els.targetHint.textContent = lastCandles
+      ? 'Tap any price to use it. ★ is the best risk/reward target from the chart.'
+      : 'Tap any price to use it. Hit “Plan it” for chart-based targets.';
   }
 
   /* ---- Backtest: replay a real past spike at the user's OWN position size ---- */
