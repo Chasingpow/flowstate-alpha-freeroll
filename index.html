@@ -179,6 +179,17 @@
   .tchip.r .tprice{color:var(--violet)}
   .tchip.lvl .tprice{color:var(--cyan)}
 
+  /* backtest */
+  #btDays{background:#0a0f1f;border:1px solid var(--line-strong);border-radius:11px;color:var(--txt);
+    font-family:'JetBrains Mono',monospace;font-size:12.5px;padding:0 10px;cursor:pointer}
+  .bt-head{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;margin:14px 0 4px}
+  .bt-head .bt-sym{font-size:15px;font-weight:700;color:var(--txt)}
+  .bt-head .bt-move{font-size:12.5px;color:var(--green);font-family:'JetBrains Mono',monospace}
+  .bt-sub{font-size:11.5px;color:var(--muted);margin-bottom:10px}
+  .bt-size{font-size:11.5px;color:var(--faint);margin-top:10px}
+  #btResult .err{color:var(--red)}
+  #btResult td .bt-keep{color:var(--violet)} #btResult td .bt-sell{color:var(--cyan)}
+
   /* trailing stair viz */
   #stairWrap{background:#0a0f1f;border:1px solid var(--line);border-radius:12px;padding:12px 12px 8px;margin-bottom:10px}
   .stair-legend{display:flex;gap:16px;justify-content:center;margin-top:6px;font-size:10.5px;color:var(--muted)}
@@ -399,6 +410,22 @@
       </div>
       <div class="tv-wrap"><div class="tv-placeholder" id="tvPlaceholder">Connect a ticker to load a live chart with your trade levels overlaid.</div><div id="lwchart" style="height:100%"></div></div>
     </div>
+
+    <div class="panel">
+      <h3>Backtest a Past Spike</h3>
+      <p class="hint" style="margin:-8px 0 14px">Replay a real recent run at <i>your</i> position size. We find the biggest spike in the window, assume a breakout entry at that day's open with a stop under the prior session, and show how the free-roll plan would have played out &mdash; scaled to the size you set above.</p>
+      <div class="sym-row">
+        <input id="btSym" type="text" placeholder="TICKER e.g. INHD" style="flex:1;text-transform:uppercase">
+        <select id="btDays">
+          <option value="10">10 sessions</option>
+          <option value="20" selected>20 sessions</option>
+          <option value="40">40 sessions</option>
+          <option value="90">90 sessions</option>
+        </select>
+        <button class="loadbtn" id="btRun">Run</button>
+      </div>
+      <div id="btResult"></div>
+    </div>
   </div>
 
   <footer>
@@ -524,6 +551,7 @@ const CONFIG = {
     priceNow:$('priceNow'), suggestCard:$('suggestCard'), suggestText:$('suggestText'),
     stairWrap:$('stairWrap'), trailRows:$('trailRows'),
     targetChips:$('targetChips'), targetHint:$('targetHint'),
+    btSym:$('btSym'), btDays:$('btDays'), btRun:$('btRun'), btResult:$('btResult'),
     symInput:$('symInput'), loadChart:$('loadChart'), tvPlaceholder:$('tvPlaceholder'),
     liveBar:$('liveBar'), livePrice:$('livePrice'), liveChg:$('liveChg'), liveHigh:$('liveHigh')
   };
@@ -557,6 +585,7 @@ const CONFIG = {
   const LAST = { entry:0, exit:0, stop:null, trail:null, vwap:null, rangeHigh:null };
   let lwcLoaded=false, chart=null, candleSeries=null, priceLines=[], quoteTimer=null, currentSymbol=null, sessionHigh=0, chartActive=false;
   let lastCandles=null; // most recent bars from /api/candles, used to suggest target zones
+  let btState=null;     // current backtest result { sym, base, high, entry, stop, ... }
 
   function loadLWC(){
     return new Promise(resolve=>{
@@ -628,6 +657,9 @@ const CONFIG = {
   }
   els.loadChart.addEventListener('click', connectSymbol);
   els.symInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); connectSymbol(); }});
+  els.btRun.addEventListener('click', runBacktest);
+  els.btSym.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); runBacktest(); }});
+  els.btDays.addEventListener('change',()=>{ if((els.btSym.value||'').trim()) runBacktest(); });
 
   // ---- stair visualization: trailing stop ratcheting under price ----
   function stairSVG(highs, trailStopFn){
@@ -694,6 +726,68 @@ const CONFIG = {
     els.targetChips.querySelectorAll('.tchip').forEach(btn=>{
       btn.addEventListener('click',()=>{ els.exit.value=(+btn.dataset.price).toFixed(2); calc(); });
     });
+  }
+
+  /* ---- Backtest: replay a real past spike at the user's OWN position size ---- */
+  function userSize(entry){
+    let N = sizeMode==='shares' ? +els.shares.value : (entry>0 ? (+els.capital.value)/entry : 0);
+    if(rounding==='whole') N=Math.floor(N);
+    return Math.max(0, N);
+  }
+  function freeRollMath(entry, exit, N, lockTarget){
+    const cost=N*entry, cashTarget=cost+Math.max(0,lockTarget||0);
+    let sell = rounding==='whole' ? Math.ceil(cashTarget/exit) : cashTarget/exit;
+    if(sell>=N) sell=N;
+    const runners=Math.max(0,N-sell), cashBack=sell*exit;
+    return { N, cost, sell, runners, cashBack, locked:cashBack-cost };
+  }
+  async function runBacktest(){
+    const sym=(els.btSym.value||'').trim().toUpperCase(); if(!sym) return;
+    if(!CONFIG.API_BASE){ els.btResult.innerHTML='<p class="hint err">Sign in with a connected backend to run backtests.</p>'; return; }
+    els.btResult.innerHTML='<p class="hint">Loading '+sym+'…</p>'; btState=null;
+    let bars;
+    try{
+      const days=+els.btDays.value||20;
+      const r=await fetch(CONFIG.API_BASE+'/api/candles?symbol='+encodeURIComponent(sym)+'&res=1&span=day&days='+days, authHeaders());
+      if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e.error||'data error'); }
+      bars=await r.json();
+    }catch(e){ els.btResult.innerHTML='<p class="hint err">Couldn’t load '+sym+': '+e.message+'</p>'; return; }
+    if(!bars || !bars.length){ els.btResult.innerHTML='<p class="hint err">No daily history for '+sym+' — it may be delisted or outside your data plan.</p>'; return; }
+    const d=t=>new Date(t*1000).toISOString().slice(0,10);
+    let hi=-Infinity, hiIdx=0; bars.forEach((b,i)=>{ if(b.high>hi){ hi=b.high; hiIdx=i; } });
+    let base=Infinity, baseDate=''; for(let i=0;i<=hiIdx;i++) if(bars[i].low<base){ base=bars[i].low; baseDate=d(bars[i].time); }
+    const spikeBar=bars[hiIdx], prior=bars[hiIdx-1]||spikeBar;
+    btState={ sym, base, baseDate, high:hi, highDate:d(spikeBar.time), spikePct:(hi/base-1)*100,
+      entry:spikeBar.open, stop:Math.min(prior.low, spikeBar.open*0.9) };
+    renderBacktest();
+  }
+  function renderBacktest(){
+    if(!btState) return;
+    const s=btState, entry=s.entry, stop=s.stop, hi=s.high, N=userSize(entry);
+    if(!(N>0)){ els.btResult.innerHTML='<p class="hint err">Set a position size above to scale this backtest to you.</p>'; return; }
+    let lockTarget=0; const cost0=N*entry;
+    if(strat==='dollar') lockTarget=Math.max(0,+els.lockDollar.value);
+    if(strat==='percent') lockTarget=Math.max(0,(+els.lockPct.value)/100*cost0);
+    const R=entry-stop, rows=[];
+    if(R>0){ rows.push(['2R target', entry+2*R]); rows.push(['3R target', entry+3*R]); }
+    rows.push(['the actual high', hi]);
+    const body=rows.filter(r=>r[1]>entry).map(([label,exit])=>{
+      const m=freeRollMath(entry, exit, N, lockTarget);
+      const runnerVal=m.runners*hi, total=m.locked+runnerVal;
+      const note = exit<=hi ? '' : ' <span style="color:var(--faint)">(not hit this run)</span>';
+      return '<tr><td>'+fmt$(exit)+' <small style="color:var(--muted)">'+label+'</small>'+note+'</td>'+
+        '<td><span class="bt-sell">'+fmtSh(m.sell)+'</span> / '+fmtSh(m.N)+'</td>'+
+        '<td><span class="bt-keep">'+fmtSh(m.runners)+'</span></td>'+
+        '<td class="pos">'+fmt$(runnerVal)+'</td><td class="pos">+'+fmt$(total)+'</td></tr>';
+    }).join('');
+    els.btResult.innerHTML =
+      '<div class="bt-head"><span class="bt-sym">'+s.sym+'</span>'+
+      '<span class="bt-move">'+fmt$(s.base)+' → '+fmt$(s.high)+'  ('+fmtPct(s.spikePct)+')</span></div>'+
+      '<div class="bt-sub">base '+s.baseDate+' → spike high '+s.highDate+' · assumed entry '+fmt$(entry)+' (breakout open), stop '+fmt$(stop)+'</div>'+
+      '<table><thead><tr><th>Exit</th><th>Sell</th><th>Keep</th><th>Runners @ high</th><th>Total</th></tr></thead><tbody>'+body+'</tbody></table>'+
+      '<p class="bt-size">At your size: <b>'+fmtSh(N)+' sh</b> (≈'+fmt$(N*entry)+'). Change “Position size” above and this rescales instantly.</p>'+
+      '<button type="button" class="loadbtn" id="btLoad" style="margin-top:12px">Load these levels into the calculator</button>';
+    const bl=$('btLoad'); if(bl) bl.addEventListener('click',()=>{ els.entry.value=entry.toFixed(2); els.stop.value=stop.toFixed(2); calc(); window.scrollTo({top:0,behavior:'smooth'}); });
   }
 
   function calc(){
@@ -826,6 +920,7 @@ const CONFIG = {
     LAST.stop  = stopValid ? stop : null;
     LAST.trail = (runners>0 && priceNow>0) ? trailStopFn(priceNow) : null;
     if(chartActive) drawLevels();
+    if(btState) renderBacktest(); // rescale the backtest to the current position size
   }
 
   function setIdle(msg){
